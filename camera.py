@@ -3,7 +3,6 @@ import pygame as py
 class Camera:
     def __init__(self, pos):
         self.pos = py.math.Vector2(pos)
-        self.vel = py.math.Vector2(0, 0)
 
         self.holding_space = False
         self.holding_button = False # mouse button

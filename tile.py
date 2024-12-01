@@ -38,7 +38,7 @@ class TileMapManager:
         self.WIDTH, self.HEIGHT = self.display_window.get_width(), self.display_window.get_height()
 
         # auto tile settings
-        self.tile_size = 32
+        self.tile_size = 12 
         self.tile_types = ['stone']
         self.tile_variants = {}
         self.tile_maps = {
@@ -89,12 +89,14 @@ class TileMapManager:
         self.adjacent_neighbor_offsets = [(0, 1), (0, -1), (-1, 0), (1, 0)]
         self.corner_neighbor_offsets = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
-        self.tiles = {}
+        self.tiles = {} # real world tiles
+        self.vtiles = {} # virtual tiles used for rendering only
         self.current_tile_type = 0
         self.current_tile_variant = 0
 
         # chunk and grid
-        self.chunk_size = [16, 9]
+        self.chunk_pos = [0, 0]
+        self.chunk_size = [12, 12]
         self.world_chunk_size = [i*self.tile_size for i in self.chunk_size]
         
         # overlay grids
@@ -123,9 +125,16 @@ class TileMapManager:
                 src = f"{assets_path[tile_type]}{img_src}"
                 img = load_tile_surface(src, tile_size) # load image
                 self.tile_variants[tile_type][i] = img # add image to variants
+            print({self.tile_variants[tile_type][i]: '1'})
 
-    def add(self, tile_pos):
+    def add(self, tile_pos, chunk_pos):
         self.tiles[tile_pos] = Tile(self.tile_types[self.current_tile_type], self.current_tile_variant, tile_pos, self.tile_size, self.tile_variants[self.tile_types[self.current_tile_type]][self.current_tile_variant])
+        # might have rendering conflicts with auto tiling
+        try:
+            self.vtiles[chunk_pos][tile_pos] = self.tiles[tile_pos] 
+        except KeyError:
+            self.vtiles[chunk_pos] = {}
+            self.vtiles[chunk_pos][tile_pos] = self.tiles[tile_pos] 
 
         self.auto_tile([
             
@@ -145,9 +154,10 @@ class TileMapManager:
             (tile_pos[0] - 1, tile_pos[1] - 1), # top left
         ])
 
-    def delete(self, tile_pos):
+    def delete(self, tile_pos, chunk_pos):
         try:
             del self.tiles[tile_pos]
+            del self.vtiles[chunk_pos][tile_pos]
 
             self.auto_tile([
             
@@ -189,7 +199,11 @@ class TileMapManager:
             self.mode = 'brush'
 
     def draw(self, draw_surf, camera_offset):
-        [tile.draw(draw_surf, camera_offset) for tile in self.tiles.values()]
+
+        for shift in [(0, 0), (0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]:
+            offset = shift[0] + self.chunk_pos[0], shift[1] + self.chunk_pos[1]
+            [tile.draw(draw_surf, camera_offset) for tile in self.vtiles.get(offset, {}).values()]
+            py.draw.rect(draw_surf, 'red', (offset[0] * self.world_chunk_size[0] + camera_offset[0], offset[1] * self.world_chunk_size[1] + camera_offset[1], self.world_chunk_size[0], self.world_chunk_size[1]), 5)
 
     def draw_tile_overlay(self, draw_surf, pos, camera_offset):
         draw_surf.blit(self.tile_variants[self.tile_types[self.current_tile_type]][self.current_tile_variant], (pos[0] * self.tile_size + camera_offset[0], pos[1] * self.tile_size + camera_offset[1]))
@@ -243,23 +257,27 @@ class TileMapManager:
 
     def button_control(self, buttons):
         if buttons[0]:
+            
             match self.mode:
                 case 'brush':
-                    self.add(self.tile_grid_pos)
+                    self.add(self.tile_grid_pos, self.chunk_pos)
                 case 'eraser':
-                    self.delete(self.tile_grid_pos)
+                    self.delete(self.tile_grid_pos, self.chunk_pos)
 
-    def update(self, pos, camera_offset):
+    def update_pos(self, pos, camera_offset):
         # position
         self.real_world_pos = pos[0] - camera_offset[0], pos[1] - camera_offset[1]
         self.tile_grid_pos = self.real_world_pos[0] // self.tile_size, self.real_world_pos[1] // self.tile_size
+        self.chunk_pos = tuple(get_floored_offset(self.tile_grid_pos, self.chunk_size))
 
+    def update(self, camera_offset):
         self.grid_manager.update((self.WIDTH, self.HEIGHT), camera_offset)
 
         self.grid_manager.draw_bg(self.display_window, camera_offset)
         self.draw(self.display_window, camera_offset)
-        self.draw_tile_overlay(self.display_window, self.tile_grid_pos, camera_offset)
-        self.grid_manager.draw_grids(self.display_window, camera_offset)
+        if self.mode == 'brush':
+            self.draw_tile_overlay(self.display_window, self.tile_grid_pos, camera_offset)
+        # self.grid_manager.draw_grids(self.display_window, camera_offset)
 
 
 class GridManager:
@@ -267,7 +285,7 @@ class GridManager:
         self.grids = {}
         self.background_chunks = {}
         self.chunk_size = [12, 12]
-        self.grid_size = [16*tile_size, 16*tile_size]
+        self.grid_size = [1*tile_size, 1*tile_size]
         self.tile_size = tile_size
 
         self.grid_chunk_pos = (0, 0)
@@ -289,8 +307,8 @@ class GridManager:
         chunk_pos = pos
 
         self.background_chunks[chunk_pos] = [py.Surface((self.chunk_size[0]*self.tile_size, self.chunk_size[1]*self.tile_size), py.SRCALPHA), [chunk_pos[0]*self.chunk_size[0]*self.tile_size, chunk_pos[1]*self.chunk_size[1]*self.tile_size]]
-        self.background_chunks[chunk_pos][0].fill((100, 100, 100)) if (pos[0]+pos[1]) % 2 == 0 else self.background_chunks[chunk_pos][0].fill((241, 241, 241))
-        self.background_chunks[chunk_pos][0].set_alpha(128 )
+        self.background_chunks[chunk_pos][0].fill('#b5b5b5') if (pos[0]+pos[1]) % 2 == 0 else self.background_chunks[chunk_pos][0].fill('#f0f0f0')
+        self.background_chunks[chunk_pos][0].set_alpha(164)
         self.background_chunks[chunk_pos][0].convert_alpha()
 
 
@@ -330,7 +348,7 @@ class GridManager:
     def update(self, draw_surf_size, camera_offset):
         self.grid_chunk_pos = tuple(get_floored_offset((-camera_offset[0]+draw_surf_size[0]/2, -camera_offset[1]+draw_surf_size[1]/2), [self.chunk_size[0]*self.grid_size[0], self.chunk_size[1]*self.grid_size[1]]))
         self.bg_chunk_pos = tuple(get_floored_offset((-camera_offset[0]+draw_surf_size[0]/2, -camera_offset[1]+draw_surf_size[1]/2), [self.chunk_size[0]*self.tile_size, self.chunk_size[1]*self.tile_size]))
-        print(self.grid_chunk_pos, self.bg_chunk_pos)
+        # print(self.grid_chunk_pos, self.bg_chunk_pos)
 
 
 def get_floored_offset(pos:tuple|list, size:tuple|list) -> list:

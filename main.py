@@ -7,11 +7,11 @@ class APP:
         self.SIZE = (1080, 720)
         self.screen = py.display.set_mode(self.SIZE)
         self.clock = py.time.Clock()
-
+  
         self.running = True
 
         # delta time settings
-        self.FPS = 1000
+        self.FPS = 60
         self.delta_time_setting = 60
 
         self.main_editor = Editor(self.screen)
@@ -20,7 +20,7 @@ class APP:
         while self.running:
             delta_time = self.get_delta_time()
             self.handle_events()
-            # print(self.clock.get_fps())
+            # print(self.clock.get_f    ps())
             
             # update screen
             self.screen.fill((0, 0, 0))

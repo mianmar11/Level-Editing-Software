@@ -19,7 +19,7 @@ class Editor:
 
     def update(self):
         self.camera.update(self.mpos)
-        self.tile_map_manager.update(self.mpos, self.camera.pos)
+        self.tile_map_manager.update(self.camera.pos)
         if self.cursor.mode == 'default':
             self.tile_map_manager.button_control(self.mbuttons)
         
@@ -51,6 +51,7 @@ class Editor:
             # if self.camera.holding_button and self.camera.holding_space:
             if self.cursor.mode == 'move':
                 self.camera.move()
+            self.tile_map_manager.update_pos(self.mpos, self.camera.pos)
 
         if event.type == py.KEYDOWN:
             self.camera.keydown(event.key)
