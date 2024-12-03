@@ -38,7 +38,7 @@ class TileMapManager:
         self.WIDTH, self.HEIGHT = self.display_window.get_width(), self.display_window.get_height()
 
         # auto tile settings
-        self.tile_size = 12 
+        self.tile_size = 24
         self.tile_types = ['stone']
         self.tile_variants = {}
         self.tile_maps = {
